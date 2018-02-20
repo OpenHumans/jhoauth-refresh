@@ -43,7 +43,6 @@ async def update():
                                    os.getenv('OH_CLIENT_ID'),
                                    os.getenv('OH_CLIENT_SECRET'),
                                    os.getenv('OH_REFRESH_TOKEN'),)
-    print(tokens)
     os.environ['OH_ACCESS_TOKEN'] = tokens['access_token']
     os.environ['OH_REFRESH_TOKEN'] = tokens['refresh_token']
 
@@ -60,6 +59,8 @@ def load_jupyter_server_extension(nbapp):
     """
     setup_handlers(nbapp.web_app)
 
-    # XXX set the period properly
-    pc = PeriodicCallback(update, 1e3 * 15)
+    # XXX set the period properly based on expiry time of the token
+    # the period has to be specified in milliseconds
+    # OpenHumans tokens expire after ten hours, we renew every 8.5h
+    pc = PeriodicCallback(update, 1e3 * 60 * 60 * 8.5)
     pc.start()
