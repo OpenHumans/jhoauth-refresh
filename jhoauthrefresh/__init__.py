@@ -3,6 +3,7 @@ import json
 import urllib
 
 from tornado import web
+from tornado.ioloop import IOLoop
 from tornado.ioloop import PeriodicCallback
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
@@ -59,6 +60,11 @@ def load_jupyter_server_extension(nbapp):
     """
     setup_handlers(nbapp.web_app)
 
+    # update once at teh start to handle the case where the server is
+    # being started so long after the login that the token itself has
+    # expired so we need to refresh it straight away
+    loop = IOLoop.current()
+    loop.run_sync(update)
     # XXX set the period properly based on expiry time of the token
     # the period has to be specified in milliseconds
     # OpenHumans tokens expire after ten hours, we renew every 8.5h
