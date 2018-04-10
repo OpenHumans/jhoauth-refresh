@@ -1,6 +1,7 @@
 # JupyterHub OAuth2 Token Refresher
 
-Jupyter notebook extension that keeps refreshing your OAuth2 tokens.
+Jupyter notebook extension that periodically asks a service for a token and
+stores it in an environment variable.
 
 
 ## Install
