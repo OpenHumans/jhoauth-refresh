@@ -23,14 +23,10 @@ def setup_handlers(web_app):
         ])
 
 
-async def fetch_new_token(token_url, client_id, client_secret, refresh_token):
-    params = {"grant_type": "refresh_token",
-              "client_id": client_id,
-              "client_secret": client_secret,
-              "refresh_token": refresh_token,
-              }
+async def fetch_new_token(token,
+                          url='https://notebooks.openhumans.org/services/refresher/tokens'):
     body = urllib.parse.urlencode(params)
-    req = HTTPRequest(token_url, 'POST', body=body)
+    req = HTTPRequest(token_url, headers={"Authorization": "token %s" % token})
 
     client = AsyncHTTPClient()
     resp = await client.fetch(req)
@@ -40,12 +36,9 @@ async def fetch_new_token(token_url, client_id, client_secret, refresh_token):
 
 
 async def update():
-    tokens = await fetch_new_token(os.getenv('OH_OAUTH2_TOKEN_URL'),
-                                   os.getenv('OH_CLIENT_ID'),
-                                   os.getenv('OH_CLIENT_SECRET'),
-                                   os.getenv('OH_REFRESH_TOKEN'),)
+    jhub_api_token = os.getenv("JUPYTERHUB_API_TOKEN")
+    tokens = await fetch_new_token(jhub_api_token)
     os.environ['OH_ACCESS_TOKEN'] = tokens['access_token']
-    os.environ['OH_REFRESH_TOKEN'] = tokens['refresh_token']
 
 
 def _jupyter_server_extension_paths():
