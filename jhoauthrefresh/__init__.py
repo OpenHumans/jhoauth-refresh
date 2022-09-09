@@ -1,64 +1,64 @@
 import os
 import json
-import urllib
 
+from jupyter_server.base.handlers import JupyterHandler
+from jupyter_server.serverapp import ServerApp
+import tornado
 from tornado import web
 from tornado.ioloop import IOLoop
 from tornado.ioloop import PeriodicCallback
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
-
 from notebook.utils import url_path_join
-from notebook.base.handlers import IPythonHandler
+
+from .config import JHOauthRefreshConfig
 
 
-class TokenHandler(IPythonHandler):
-    @web.authenticated
+class TokenHandler(JupyterHandler):
+    @tornado.web.authenticated
     async def get(self):
-        self.write(os.getenv('OH_ACCESS_TOKEN'))
+        config = self.settings["jhoauthrefresh"]
+        self.write(os.getenv(config.oauth_token_env_var))
 
 
-def setup_handlers(web_app):
-    web_app.add_handlers('.*', [
-        (url_path_join(web_app.settings['base_url'], 'oh-token'), TokenHandler)
-        ])
+def setup_handlers(web_app, endpoint):
+    web_app.add_handlers(
+        ".*", [(url_path_join(web_app.settings["base_url"], endpoint), TokenHandler,)],
+    )
 
 
-async def fetch_new_token(token,
-                          url='https://notebooks.openhumans.org/services/refresher/tokens'):
+async def fetch_new_token(token, url):
     req = HTTPRequest(url, headers={"Authorization": "token %s" % token})
 
     client = AsyncHTTPClient()
     resp = await client.fetch(req)
 
-    resp_json = json.loads(resp.body.decode('utf8', 'replace'))
+    resp_json = json.loads(resp.body.decode("utf8", "replace"))
     return resp_json
 
 
-async def update():
-    jhub_api_token = os.getenv("JUPYTERHUB_API_TOKEN")
-    tokens = await fetch_new_token(jhub_api_token)
-    os.environ['OH_ACCESS_TOKEN'] = tokens['access_token']
+async def update(config):
+    jhub_api_token = os.getenv(config.jupyterhub_token_env_var)
+    tokens = await fetch_new_token(jhub_api_token, config.new_token_url)
+    os.environ[config.oauth_token_env_var] = tokens["access_token"]
 
 
-def _jupyter_server_extension_paths():
-    return [{
-        'module': 'jhoauthrefresh',
-        }]
+def _jupyter_server_extension_points():
+    return [{"module": "jhoauthrefresh",}]
 
 
-def load_jupyter_server_extension(nbapp):
+def _load_jupyter_server_extension(serverapp: ServerApp):
     """
-    Called when the extension is loaded.
+    This function is called when the extension is loaded.
     """
-    setup_handlers(nbapp.web_app)
+    config = JHOauthRefreshConfig(config=serverapp.config)
+    serverapp.web_app.settings["jhoauthrefresh"] = config
+    setup_handlers(serverapp.web_app, config.extension_endpoint)
 
-    # update once at teh start to handle the case where the server is
+    # update once at the start to handle the case where the server is
     # being started so long after the login that the token itself has
     # expired so we need to refresh it straight away
     loop = IOLoop.current()
-    loop.run_sync(update)
-    # XXX set the period properly based on expiry time of the token
-    # the period has to be specified in milliseconds
-    # OpenHumans tokens expire after ten hours, we renew every 8.5h
-    pc = PeriodicCallback(update, 1e3 * 60 * 60 * 8.5)
+    loop.run_sync(lambda: update(config))
+    print(config.renew_period)
+    pc = PeriodicCallback(lambda: update(config), config.renew_period)
     pc.start()
